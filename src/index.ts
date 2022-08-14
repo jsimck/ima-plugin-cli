@@ -9,3 +9,4 @@ export {
 
 export { swcTransformer } from './transformers/swcTransformer';
 export { preprocessTransformer } from './transformers/preprocessTransformer';
+export { linkPlugin } from './plugins/linkPlugin';

@@ -15,7 +15,40 @@ export async function parseConfig(cwd: string): Promise<BuildConfig> {
     throw new Error(`Unable to load the ${configPath} config file.`);
   }
 
-  return (await import(configPath)) as BuildConfig;
+  return {
+    plugins: [],
+    exclude: ['**/__tests__/**', '**/node_modules/**'],
+    ...(await import(configPath)),
+  };
+}
+
+/**
+ * Helper function to emit source. If it's not undefined, the source is
+ * written to the output path. If it is undefined, the original file
+ * is simply copied.
+ */
+export async function emitSource(
+  source: Source | undefined,
+  filePath: string,
+  outputPath: string
+) {
+  const outputDir = path.dirname(outputPath);
+
+  // Create output directory
+  if (!fs.existsSync(outputDir)) {
+    await fs.promises.mkdir(outputDir, { recursive: true });
+  }
+
+  // Emit source
+  if (source) {
+    return Promise.all([
+      fs.promises.writeFile(outputPath, source.code),
+      source.map && fs.promises.writeFile(`${outputPath}.map`, source.map),
+    ]);
+  } else {
+    // Just copy files without source
+    await fs.promises.copyFile(filePath, outputPath);
+  }
 }
 
 /**
@@ -40,7 +73,7 @@ export async function processTransformers(
       : [transformer];
 
     if (!options) {
-      source = await transform(source, context);
+      source = await transform({ source, context });
       continue;
     }
 
@@ -49,7 +82,7 @@ export async function processTransformers(
       continue;
     }
 
-    source = await transform(source, context);
+    source = await transform({ source, context });
   }
 
   return source;
@@ -68,6 +101,8 @@ export function createProcessingPipeline(params: {
   return async (filePath: string) => {
     const fileName = path.basename(filePath);
     const contextFilePath = path.relative(params.inputDir, filePath);
+    const outputFilePath = path.resolve(params.outputDir, contextFilePath);
+    const outputFileDir = path.dirname(outputFilePath);
 
     const context: PipeContext = {
       ...params,
@@ -76,20 +111,21 @@ export function createProcessingPipeline(params: {
       filePath,
     };
 
+    let source: Source | undefined;
+
     // Process transforms
-    const source = await processTransformers(context);
-
-    // Output
-    const outputFilePath = path.resolve(context.outputDir, contextFilePath);
-    const outputFileDir = path.dirname(outputFilePath);
-
-    if (!fs.existsSync(outputFileDir)) {
-      await fs.promises.mkdir(outputFileDir, { recursive: true });
+    if (!params.config?.skipTransform?.some(testRe => testRe.test(filePath))) {
+      source = await processTransformers(context);
     }
 
-    await Promise.all([
-      fs.promises.writeFile(outputFilePath, source.code),
-      source.map && fs.promises.writeFile(`${outputFilePath}.map`, source.map),
-    ]);
+    // Write new source
+    await emitSource(source, filePath, outputFilePath);
+
+    // Run plugins
+    if (Array.isArray(params.config.plugins)) {
+      for (const plugin of params.config.plugins) {
+        await plugin({ source, context });
+      }
+    }
   };
 }

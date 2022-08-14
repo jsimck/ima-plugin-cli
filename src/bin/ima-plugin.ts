@@ -8,6 +8,47 @@ import globby from 'globby';
 import { success, info, trackTime, update } from '../utils/logger';
 import chalk from 'chalk';
 import chokidar from 'chokidar';
+import { BuildConfig } from '../types';
+import { linkPlugin } from '../plugins/linkPlugin';
+
+const dev = async (config: BuildConfig) => {
+  const time = trackTime();
+  const cwd = process.cwd();
+
+  const inputDir = path.resolve(cwd, config.input);
+  const outputDir = path.resolve(cwd, config.output);
+
+  info(`Watching compilation in ${chalk.magenta(cwd)} directory...`);
+
+  // Cleanup
+  if (fs.existsSync(outputDir)) {
+    fs.rmSync(outputDir, { recursive: true });
+  }
+
+  chokidar
+    .watch([path.join(inputDir, './**/*')], {
+      cwd,
+      ignoreInitial: false,
+      ignored: config.exclude,
+    })
+    .on('all', async (eventName, filePath) => {
+      const processingPipeline = createProcessingPipeline({
+        inputDir,
+        config,
+        cwd,
+        outputDir,
+      });
+
+      if (['add', 'change'].includes(eventName)) {
+        update(`Processing ${chalk.magenta(filePath)} file...`);
+        const time = trackTime();
+        await processingPipeline(filePath);
+        success(`Finished in ${chalk.gray(time())}`);
+      }
+    });
+
+  success(`Finished compilation in ${chalk.gray(time())}`);
+};
 
 program.name('ima-plugin').description('CLI helper to build ima plugins');
 
@@ -30,7 +71,7 @@ program
     }
 
     const files = await globby(path.join(inputDir, './**/*'), {
-      ignore: config.exclude ?? ['**/__tests__/**', '**/node_modules/**'],
+      ignore: config.exclude,
     });
 
     files.forEach(
@@ -45,49 +86,31 @@ program
     success(`Finished compilation in ${chalk.gray(time())}`);
   });
 
+program.command('dev').action(async () => {
+  const cwd = process.cwd();
+  const config = await parseConfig(cwd);
+  dev(config);
+});
+
 program
-  .command('dev')
-  .option('-c, --clean', 'clean output directory')
-  .action(async () => {
-    const time = trackTime();
+  .command('link')
+  .argument('<path>', 'path to app directory for linking')
+  .action(async pkgPath => {
     const cwd = process.cwd();
     const config = await parseConfig(cwd);
 
-    const inputDir = path.resolve(cwd, config.input);
-    const outputDir = path.resolve(cwd, config.output);
-
-    info(`Watching compilation in ${chalk.magenta(cwd)} directory...`);
-
-    // Cleanup
-    if (fs.existsSync(outputDir)) {
-      fs.rmSync(outputDir, { recursive: true });
+    // INJECT link plugin
+    if (!Array.isArray(config.plugins)) {
+      config.plugins = [];
     }
 
-    chokidar
-      .watch([path.join(inputDir, './**/*')], {
-        cwd,
-        ignoreInitial: false,
-        ignored: config.exclude ?? ['**/__tests__/**', '**/node_modules/**'],
+    config.plugins.push(
+      linkPlugin({
+        output: path.resolve(pkgPath),
       })
-      .on('all', async (eventName, filePath) => {
-        const processingPipeline = createProcessingPipeline({
-          inputDir,
-          config,
-          cwd,
-          outputDir,
-        });
+    );
 
-        if (['add', 'change'].includes(eventName)) {
-          update(`Processing ${chalk.magenta(filePath)} file...`);
-          const time = trackTime();
-          await processingPipeline(filePath);
-          success(`Finished in ${chalk.gray(time())}`);
-        }
-      });
-
-    success(`Finished compilation in ${chalk.gray(time())}`);
+    dev(config);
   });
-
-program.command('link');
 
 program.parse();

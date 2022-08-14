@@ -9,7 +9,7 @@ export interface PreprocessTransformerOptions {
 export function preprocessTransformer(
   options: PreprocessTransformerOptions
 ): Transformer {
-  return async (source, context) => {
+  return async ({ source, context }) => {
     const extension = path.extname(context.fileName).slice(1);
     const code = preprocess(
       source.code,
