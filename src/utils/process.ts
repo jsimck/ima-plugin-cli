@@ -101,8 +101,6 @@ export function createProcessingPipeline(params: {
   return async (filePath: string) => {
     const fileName = path.basename(filePath);
     const contextFilePath = path.relative(params.inputDir, filePath);
-    const outputFilePath = path.resolve(params.outputDir, contextFilePath);
-    const outputFileDir = path.dirname(outputFilePath);
 
     const context: PipeContext = {
       ...params,
@@ -119,7 +117,11 @@ export function createProcessingPipeline(params: {
     }
 
     // Write new source
-    await emitSource(source, filePath, outputFilePath);
+    await emitSource(
+      source,
+      filePath,
+      path.resolve(params.outputDir, contextFilePath)
+    );
 
     // Run plugins
     if (Array.isArray(params.config.plugins)) {

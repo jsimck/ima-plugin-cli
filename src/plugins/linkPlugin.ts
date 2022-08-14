@@ -29,8 +29,6 @@ export function linkPlugin({ output }: LinkPluginOptions): Plugin {
       );
     }
 
-    console.log(path.join(outputBasePath, context.contextFilePath));
-
     // Emit source to new location
     await emitSource(
       source,
