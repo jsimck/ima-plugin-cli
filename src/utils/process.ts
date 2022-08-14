@@ -4,22 +4,29 @@ import path from 'path';
 import { BuildConfig, PipeContext, Source } from '../types';
 
 const CONFIG_FILENAME = 'ima.build.js';
+const CONFIG_DEFAULTS = {
+  plugins: [],
+  exclude: ['**/__tests__/**', '**/node_modules/**'],
+};
 
 /**
  * Parses ima.build.js file, initializing the build pipeline.
  */
-export async function parseConfig(cwd: string): Promise<BuildConfig> {
+export async function parseConfigFile(cwd: string): Promise<BuildConfig[]> {
   const configPath = path.resolve(cwd, CONFIG_FILENAME);
 
   if (!fs.existsSync(configPath)) {
     throw new Error(`Unable to load the ${configPath} config file.`);
   }
 
-  return {
-    plugins: [],
-    exclude: ['**/__tests__/**', '**/node_modules/**'],
-    ...(await import(configPath)),
-  };
+  // We handle each config as array for easier handling
+  let loadedConfig = (await import(configPath)).default;
+  loadedConfig = Array.isArray(loadedConfig) ? loadedConfig : [loadedConfig];
+
+  return loadedConfig.map((config: BuildConfig) => ({
+    ...CONFIG_DEFAULTS,
+    ...config,
+  })) as BuildConfig[];
 }
 
 /**
