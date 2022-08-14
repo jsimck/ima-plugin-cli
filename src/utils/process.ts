@@ -1,10 +1,13 @@
 import fs from 'fs';
 import path from 'path';
 
-import { BuildConfig, PipeContext, Source } from './types';
+import { BuildConfig, PipeContext, Source } from '../types';
 
 const CONFIG_FILENAME = 'ima.build.js';
 
+/**
+ * Parses ima.build.js file, initializing the build pipeline.
+ */
 export async function parseConfig(cwd: string): Promise<BuildConfig> {
   const configPath = path.resolve(cwd, CONFIG_FILENAME);
 
@@ -15,6 +18,10 @@ export async function parseConfig(cwd: string): Promise<BuildConfig> {
   return (await import(configPath)) as BuildConfig;
 }
 
+/**
+ * Load source file contents and runs transformers on it, provided
+ * in the ima.build.js config.
+ */
 export async function processTransformers(
   context: PipeContext
 ): Promise<Source> {
@@ -48,7 +55,11 @@ export async function processTransformers(
   return source;
 }
 
-export function createPipe(params: {
+/**
+ * Creates processing pipeline used in build, link and dev scripts.
+ * It is constructed to run on each file separately.
+ */
+export function createProcessingPipeline(params: {
   inputDir: string;
   outputDir: string;
   cwd: string;
