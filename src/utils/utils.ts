@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import chalk, { ChalkFunction } from 'chalk';
 import prettyMs from 'pretty-ms';
 
@@ -23,4 +25,17 @@ export function trackTime(): () => string {
 
   return () =>
     prettyMs(Number((process.hrtime.bigint() - start) / BigInt(1e6)));
+}
+
+/**
+ * Loads and parses package.json at given working directory.
+ */
+export async function parsePkgJSON(cwd: string): Promise<{
+  name: string;
+}> {
+  return JSON.parse(
+    await (
+      await fs.promises.readFile(path.join(cwd, 'package.json'))
+    ).toString()
+  );
 }

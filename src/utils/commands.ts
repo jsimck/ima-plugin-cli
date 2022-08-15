@@ -1,10 +1,9 @@
 import fs from 'fs';
 import chalk from 'chalk';
-import { info } from 'console';
 import globby from 'globby';
 import path from 'path';
 import chokidar from 'chokidar';
-import { success, trackTime, update } from './logger';
+import { info, parsePkgJSON, success, trackTime } from './utils';
 import { createProcessingPipeline, parseConfigFile } from './process';
 import { linkPlugin } from '../plugins/linkPlugin';
 
@@ -14,9 +13,12 @@ import { linkPlugin } from '../plugins/linkPlugin';
 export async function build() {
   const time = trackTime();
   const cwd = process.cwd();
-  const configurations = await parseConfigFile(cwd);
+  const [pkgJson, configurations] = await Promise.all([
+    parsePkgJSON(cwd),
+    parseConfigFile(cwd),
+  ]);
 
-  info(`Starting compilation in ${chalk.magenta(cwd)} directory...`);
+  info(`Building ${chalk.bold.magenta(pkgJson.name)}`);
 
   // Spawn compilation for each config
   await Promise.all(
@@ -34,19 +36,20 @@ export async function build() {
         ignore: config.exclude,
       });
 
+      // Init processing pipeline
+      const process = createProcessingPipeline({
+        inputDir,
+        config,
+        cwd,
+        outputDir,
+      });
+
       // Process each file with loaded pipeline
-      files.forEach(
-        createProcessingPipeline({
-          inputDir,
-          config,
-          cwd,
-          outputDir,
-        })
-      );
+      files.forEach(process);
     })
   );
 
-  success(`Finished compilation in ${chalk.gray(time())}`);
+  success(`Finished in ${chalk.bold.gray(time())}`);
 }
 
 /**
@@ -55,70 +58,72 @@ export async function build() {
 export function watchFactory(command: 'dev' | 'link') {
   return async (...args: any[]) => {
     const cwd = process.cwd();
-    const configurations = await parseConfigFile(cwd);
+    const [pkgJson, configurations] = await Promise.all([
+      parsePkgJSON(cwd),
+      parseConfigFile(cwd),
+    ]);
 
-    const time = trackTime();
-    info(`Watching compilation in ${chalk.magenta(cwd)} directory...`);
+    info(`Watching ${chalk.bold.magenta(pkgJson.name)}`);
 
     // Spawn watch for each config
-    await Promise.all(
-      configurations.map(async config => {
-        const inputDir = path.resolve(cwd, config.input);
-        const outputDir = path.resolve(cwd, config.output);
+    configurations.forEach(async config => {
+      const inputDir = path.resolve(cwd, config.input);
+      const outputDir = path.resolve(cwd, config.output);
 
-        // Cleanup
-        if (fs.existsSync(outputDir)) {
-          fs.rmSync(outputDir, { recursive: true });
+      // Cleanup
+      if (fs.existsSync(outputDir)) {
+        fs.rmSync(outputDir, { recursive: true });
+      }
+
+      // Inject link plugin
+      if (command === 'link') {
+        if (!Array.isArray(config.plugins)) {
+          config.plugins = [];
         }
 
-        // Inject link plugin
-        if (command === 'link') {
-          if (!Array.isArray(config.plugins)) {
-            config.plugins = [];
+        config.plugins.push(
+          linkPlugin({
+            output: path.resolve(args[0]),
+          })
+        );
+      }
+
+      // Init processing pipeline
+      const process = createProcessingPipeline({
+        inputDir,
+        config,
+        cwd,
+        outputDir,
+      });
+
+      chokidar
+        .watch([path.join(inputDir, './**/*')], {
+          cwd,
+          ignoreInitial: false,
+          ignored: config.exclude,
+        })
+        .on('all', async (eventName, filePath) => {
+          // Process new and changed files with pipeline
+          if (['add', 'change'].includes(eventName)) {
+            const time = trackTime();
+            await process(filePath);
+            info(
+              `Processed ${chalk.magenta(filePath)} in ${chalk.gray(time())}`
+            );
           }
 
-          config.plugins.push(
-            linkPlugin({
-              output: path.resolve(args[0]),
-            })
-          );
-        }
+          // Sync deleted dirs and files
+          if (['unlink', 'unlinkDir'].includes(eventName)) {
+            info(`Removing ${filePath}`);
+            await fs.promises.rm(filePath, { recursive: true });
+          }
 
-        chokidar
-          .watch([path.join(inputDir, './**/*')], {
-            cwd,
-            ignoreInitial: false,
-            ignored: config.exclude,
-          })
-          .on('all', async (eventName, filePath) => {
-            const process = createProcessingPipeline({
-              inputDir,
-              config,
-              cwd,
-              outputDir,
-            });
-
-            // Process new and changed files with pipeline
-            if (['add', 'change'].includes(eventName)) {
-              update(`Processing ${chalk.magenta(filePath)} file...`);
-              const time = trackTime();
-              await process(filePath);
-              success(`Finished in ${chalk.gray(time())}`);
-            }
-
-            // Sync deleted dirs and files
-            if (['unlink', 'unlinkDir'].includes(eventName)) {
-              await fs.promises.rm(filePath, { recursive: true });
-            }
-
-            // Sync newly added directories
-            if (eventName === 'addDir') {
-              await fs.promises.mkdir(filePath, { recursive: true });
-            }
-          });
-      })
-    );
-
-    success(`Finished compilation in ${chalk.gray(time())}`);
+          // Sync newly added directories
+          if (eventName === 'addDir') {
+            info(`Creating ${filePath}`);
+            await fs.promises.mkdir(filePath, { recursive: true });
+          }
+        });
+    });
   };
 }

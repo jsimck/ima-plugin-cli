@@ -3,11 +3,7 @@ import path from 'path';
 
 import { BuildConfig, PipeContext, Source } from '../types';
 
-const CONFIG_FILENAME = 'ima.build.js';
-const CONFIG_DEFAULTS = {
-  plugins: [],
-  exclude: ['**/__tests__/**', '**/node_modules/**'],
-};
+const CONFIG_FILENAME = 'ima-plugin.config.js';
 
 /**
  * Parses ima.build.js file, initializing the build pipeline.
@@ -24,7 +20,8 @@ export async function parseConfigFile(cwd: string): Promise<BuildConfig[]> {
   loadedConfig = Array.isArray(loadedConfig) ? loadedConfig : [loadedConfig];
 
   return loadedConfig.map((config: BuildConfig) => ({
-    ...CONFIG_DEFAULTS,
+    plugins: [],
+    exclude: ['**/__tests__/**', '**/node_modules/**', '**/dist/**'],
     ...config,
   })) as BuildConfig[];
 }

@@ -1,7 +1,9 @@
+import chalk from 'chalk';
 import fs from 'fs';
 import path from 'path';
 import { Plugin } from '../types';
 import { emitSource } from '../utils/process';
+import { info, parsePkgJSON } from '../utils/utils';
 
 export interface LinkPluginOptions {
   output: string;
@@ -13,11 +15,7 @@ export function linkPlugin({ output }: LinkPluginOptions): Plugin {
 
   return async ({ context, source }) => {
     if (!pkgName) {
-      pkgName = JSON.parse(
-        await (
-          await fs.promises.readFile(path.join(context.cwd, 'package.json'))
-        ).toString()
-      ).name;
+      pkgName = (await parsePkgJSON(context.cwd)).name;
     }
 
     if (!outputBasePath) {
@@ -30,10 +28,13 @@ export function linkPlugin({ output }: LinkPluginOptions): Plugin {
     }
 
     // Emit source to new location
-    await emitSource(
-      source,
-      context.filePath,
-      path.join(outputBasePath, context.contextFilePath)
+    const outputFilePath = path.join(outputBasePath, context.contextFilePath);
+    await emitSource(source, context.filePath, outputFilePath);
+
+    info(
+      `Linked ${chalk.magenta(context.contextFilePath)} ${chalk.gray(
+        '→'
+      )} ${chalk.magenta(outputFilePath)}`
     );
   };
 }
