@@ -8,13 +8,7 @@ export type Transformer = ({
 }) => Source | Promise<Source>;
 export type TransformerOptions = { test: RegExp };
 
-export type Plugin = ({
-  source,
-  context,
-}: {
-  source?: Source;
-  context: PipeContext;
-}) => void | Promise<void>;
+export type Command = 'dev' | 'link' | 'build';
 
 export interface BuildConfig {
   input: string;
@@ -25,17 +19,27 @@ export interface BuildConfig {
   plugins?: Plugin[];
 }
 
+export type Plugin = (context: PluginContext) => void | Promise<void>;
+
+export interface PluginContext {
+  cwd: string;
+  config: BuildConfig;
+  inputDir: string;
+  outputDir: string;
+}
+
 export interface PipeContext {
   cwd: string;
   fileName: string;
   filePath: string;
-  contextFilePath: string;
+  contextDir: string;
   config: BuildConfig;
   inputDir: string;
   outputDir: string;
 }
 
 export interface Source {
+  fileName: string;
   code: string;
   map?: string;
 }

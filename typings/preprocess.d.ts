@@ -37,7 +37,7 @@ declare module 'preprocess' {
     source: string,
     context: PreprocessContext,
     type: PreprocessType
-  );
+  ): string;
 
   export { preprocess };
 }

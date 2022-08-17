@@ -5,7 +5,6 @@ import path from 'path';
 import chokidar from 'chokidar';
 import { info, parsePkgJSON, success, trackTime } from './utils';
 import { createProcessingPipeline, parseConfigFile } from './process';
-import { linkPlugin } from '../plugins/linkPlugin';
 
 /**
  * Build command function handler.
@@ -28,7 +27,7 @@ export async function build() {
 
       // Cleanup
       if (fs.existsSync(outputDir)) {
-        fs.rmSync(outputDir, { recursive: true });
+        await fs.promises.rm(outputDir, { recursive: true });
       }
 
       // Get file paths at input directory
@@ -37,7 +36,8 @@ export async function build() {
       });
 
       // Init processing pipeline
-      const process = createProcessingPipeline({
+      const process = await createProcessingPipeline({
+        command: 'build',
         inputDir,
         config,
         cwd,
@@ -46,6 +46,18 @@ export async function build() {
 
       // Process each file with loaded pipeline
       files.forEach(process);
+
+      // Run plugins
+      if (config?.plugins?.length) {
+        for (const plugin of config.plugins) {
+          await plugin({
+            config,
+            cwd,
+            inputDir,
+            outputDir,
+          });
+        }
+      }
     })
   );
 
@@ -75,25 +87,15 @@ export function watchFactory(command: 'dev' | 'link') {
         fs.rmSync(outputDir, { recursive: true });
       }
 
-      // Inject link plugin
-      if (command === 'link') {
-        if (!Array.isArray(config.plugins)) {
-          config.plugins = [];
-        }
-
-        config.plugins.push(
-          linkPlugin({
-            output: path.resolve(args[0]),
-          })
-        );
-      }
-
       // Init processing pipeline
-      const process = createProcessingPipeline({
+      const process = await createProcessingPipeline({
+        command,
         inputDir,
         config,
         cwd,
         outputDir,
+        linkedPath:
+          typeof args?.[0] === 'string' ? path.resolve(args[0]) : undefined,
       });
 
       chokidar

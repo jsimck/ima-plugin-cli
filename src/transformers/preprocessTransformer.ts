@@ -18,6 +18,7 @@ export function preprocessTransformer(
     );
 
     return {
+      ...source,
       code,
     };
   };
