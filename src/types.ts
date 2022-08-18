@@ -22,6 +22,7 @@ export interface BuildConfig {
 export type Plugin = (context: PluginContext) => void | Promise<void>;
 
 export interface PluginContext {
+  command: Command;
   cwd: string;
   config: BuildConfig;
   inputDir: string;
@@ -29,6 +30,7 @@ export interface PluginContext {
 }
 
 export interface PipeContext {
+  command: Command;
   cwd: string;
   fileName: string;
   filePath: string;

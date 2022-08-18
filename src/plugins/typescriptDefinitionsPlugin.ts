@@ -5,6 +5,8 @@ import path from 'path';
 import { Plugin } from '../types';
 import { info, error, success, trackTime } from '../utils/utils';
 
+const DEV_ARGS = ['--watch', '--incremental'];
+
 export function typescriptDefinitionsPlugin(): Plugin {
   return async context => {
     if (!fs.existsSync(path.join(context.cwd, 'tsconfig.json'))) {
@@ -15,15 +17,22 @@ export function typescriptDefinitionsPlugin(): Plugin {
     info('Generating typescript declaration files...');
 
     await new Promise<void>((resolve, reject) => {
-      spawn('tsc', ['--emitDeclarationOnly'], {
-        stdio: 'inherit',
-        cwd: context.cwd,
-      })
+      spawn(
+        'tsc',
+        [
+          '--emitDeclarationOnly',
+          ...(['dev', 'link'].includes(context.command) && ['--']
+            ? DEV_ARGS
+            : []),
+        ].filter(Boolean) as string[],
+        {
+          stdio: 'overlapped',
+          cwd: context.cwd,
+        }
+      )
         .on('close', () => {
           success(
-            `Typescript definitions were generated in ${chalk.gray(
-              `${time()}`
-            )}`
+            `Typescript definitions generated in ${chalk.gray(`${time()}`)}`
           );
           resolve();
         })

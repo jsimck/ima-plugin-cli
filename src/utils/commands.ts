@@ -4,7 +4,12 @@ import globby from 'globby';
 import path from 'path';
 import chokidar from 'chokidar';
 import { info, parsePkgJSON, success, trackTime } from './utils';
-import { createProcessingPipeline, parseConfigFile } from './process';
+import {
+  createProcessingPipeline,
+  parseConfigFile,
+  runPlugins,
+} from './process';
+import { Command } from '../types';
 
 /**
  * Build command function handler.
@@ -33,31 +38,25 @@ export async function build() {
       // Get file paths at input directory
       const files = await globby(path.join(inputDir, './**/*'), {
         ignore: config.exclude,
+        cwd,
       });
 
-      // Init processing pipeline
-      const process = await createProcessingPipeline({
-        command: 'build',
+      const context = {
+        command: 'build' as Command,
         inputDir,
         config,
         cwd,
         outputDir,
-      });
+      };
+
+      // Init processing pipeline
+      const process = await createProcessingPipeline(context);
 
       // Process each file with loaded pipeline
       files.forEach(process);
 
       // Run plugins
-      if (config?.plugins?.length) {
-        for (const plugin of config.plugins) {
-          await plugin({
-            config,
-            cwd,
-            inputDir,
-            outputDir,
-          });
-        }
-      }
+      await runPlugins(context);
     })
   );
 
@@ -87,45 +86,108 @@ export function watchFactory(command: 'dev' | 'link') {
         fs.rmSync(outputDir, { recursive: true });
       }
 
-      // Init processing pipeline
-      const process = await createProcessingPipeline({
-        command,
+      const context = {
+        command: command as Command,
         inputDir,
         config,
         cwd,
         outputDir,
-        linkedPath:
-          typeof args?.[0] === 'string' ? path.resolve(args[0]) : undefined,
-      });
+      };
 
+      // Init processing pipeline
+      const process = await createProcessingPipeline(context);
+
+      // Dev instance
       chokidar
         .watch([path.join(inputDir, './**/*')], {
-          cwd,
           ignoreInitial: false,
           ignored: config.exclude,
         })
         .on('all', async (eventName, filePath) => {
+          const relativePath = path.relative(inputDir, filePath);
+
           // Process new and changed files with pipeline
           if (['add', 'change'].includes(eventName)) {
             const time = trackTime();
             await process(filePath);
             info(
-              `Processed ${chalk.magenta(filePath)} in ${chalk.gray(time())}`
+              `Processed ${chalk.magenta(relativePath)} in ${chalk.gray(
+                time()
+              )}`
             );
           }
 
           // Sync deleted dirs and files
           if (['unlink', 'unlinkDir'].includes(eventName)) {
-            info(`Removing ${filePath}`);
+            info(`Removing ${relativePath}`);
             await fs.promises.rm(filePath, { recursive: true });
           }
 
           // Sync newly added directories
           if (eventName === 'addDir') {
-            info(`Creating ${filePath}`);
+            info(`Creating ${relativePath}`);
             await fs.promises.mkdir(filePath, { recursive: true });
           }
+        })
+        .on('ready', async () => {
+          // Run plugins
+          await runPlugins(context);
         });
+
+      // Link instance
+      if (command === 'link' && args[0]) {
+        const linkedPath = path.resolve(args[0]);
+        const [pkgJson, linkedPkgJson] = await Promise.all([
+          parsePkgJSON(cwd),
+          parsePkgJSON(linkedPath),
+        ]);
+
+        const linkedBasePath = path.resolve(
+          linkedPath,
+          'node_modules',
+          pkgJson.name,
+          config.output
+        );
+
+        chokidar
+          .watch([path.join(outputDir, './**/*')], {
+            ignoreInitial: false,
+            ignored: ['**/tsconfig.tsbuildinfo/**'],
+          })
+          .on('all', async (eventName, filePath) => {
+            const contextPath = path.relative(outputDir, filePath);
+            const outputPath = path.join(linkedBasePath, contextPath);
+
+            if (['add', 'change'].includes(eventName)) {
+              info(
+                `Copied ${chalk.gray(pkgJson.name + ':')}${chalk.magenta(
+                  contextPath
+                )} ${chalk.green('→')} ${chalk.gray(
+                  linkedPkgJson.name
+                )}:${chalk.magenta(contextPath)}`
+              );
+              await fs.promises.copyFile(filePath, outputPath);
+            }
+
+            if (['unlink', 'unlinkDir'].includes(eventName)) {
+              info(
+                `Removing linked ${
+                  chalk.gray(linkedPkgJson.name) + ':'
+                }{chalk.magenta(contextPath)}`
+              );
+              await fs.promises.rm(outputPath, { recursive: true });
+            }
+
+            if (eventName === 'addDir') {
+              info(
+                `Creating ${
+                  chalk.gray(linkedPkgJson.name) + ':'
+                }${chalk.magenta(contextPath)}`
+              );
+              await fs.promises.mkdir(outputPath, { recursive: true });
+            }
+          });
+      }
     });
   };
 }

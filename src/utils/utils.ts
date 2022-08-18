@@ -30,12 +30,12 @@ export function trackTime(): () => string {
 /**
  * Loads and parses package.json at given working directory.
  */
-export async function parsePkgJSON(cwd: string): Promise<{
+export async function parsePkgJSON(basePath: string): Promise<{
   name: string;
 }> {
   return JSON.parse(
     await (
-      await fs.promises.readFile(path.join(cwd, 'package.json'))
+      await fs.promises.readFile(path.join(basePath, 'package.json'))
     ).toString()
   );
 }

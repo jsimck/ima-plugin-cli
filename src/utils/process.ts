@@ -1,9 +1,13 @@
-import chalk from 'chalk';
 import fs from 'fs';
 import path from 'path';
 
-import { BuildConfig, Command, PipeContext, Source } from '../types';
-import { info, parsePkgJSON } from './utils';
+import {
+  BuildConfig,
+  Command,
+  PipeContext,
+  PluginContext,
+  Source,
+} from '../types';
 
 const CONFIG_FILENAME = 'ima-plugin.config.js';
 
@@ -23,7 +27,14 @@ export async function parseConfigFile(cwd: string): Promise<BuildConfig[]> {
 
   return loadedConfig.map((config: BuildConfig) => ({
     plugins: [],
-    exclude: ['**/__tests__/**', '**/node_modules/**', '**/dist/**'],
+    exclude: [
+      '**/__tests__/**',
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/typings/**',
+      'tsconfig.tsbuildinfo',
+    ],
+    skipTransform: [/\.(css|less|json)/],
     ...config,
   })) as BuildConfig[];
 }
@@ -108,18 +119,7 @@ export async function createProcessingPipeline(params: {
   outputDir: string;
   cwd: string;
   config: BuildConfig;
-  linkedPath?: string;
 }) {
-  const pkgName = (await parsePkgJSON(params.cwd)).name;
-  const linkedBasePath = params.linkedPath
-    ? path.resolve(
-        params.linkedPath,
-        'node_modules',
-        pkgName,
-        params.config.output
-      )
-    : null;
-
   return async (filePath: string) => {
     const fileName = path.basename(filePath);
     const contextDir = path.dirname(path.relative(params.inputDir, filePath));
@@ -144,26 +144,18 @@ export async function createProcessingPipeline(params: {
       context,
       path.resolve(params.outputDir, contextDir)
     );
-
-    // Emit to linked location for link command
-    if (linkedBasePath && params.command === 'link') {
-      const outputDir = path.join(linkedBasePath, context.contextDir);
-
-      // Emit source to new location
-      await emitSource(source, context, outputDir);
-
-      info(
-        `Linked ${chalk.magenta(
-          path.join(context.contextDir, context.fileName)
-        )} ${chalk.gray('→')} ${chalk.magenta(outputDir)}`
-      );
-
-      // Write new source
-      await emitSource(
-        source,
-        context,
-        path.resolve(params.outputDir, contextDir)
-      );
-    }
   };
+}
+
+/**
+ * Runs plugins defined in config file.
+ */
+export async function runPlugins(context: PluginContext) {
+  if (!context.config?.plugins?.length) {
+    return;
+  }
+
+  for (const plugin of context.config.plugins) {
+    await plugin(context);
+  }
 }
