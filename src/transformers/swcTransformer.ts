@@ -11,12 +11,10 @@ export function swcTransformer(options: SWCTransformerOptions): Transformer {
       const { code, map } = await transform(source.code, options);
 
       const newFilename = source.fileName.replace(TSX_RE, '.js');
-      const withSourceMapsComment =
-        code + `\n//# sourceMappingURL=${newFilename}.map`;
 
       return {
         fileName: newFilename,
-        code: withSourceMapsComment,
+        code: map ? code + `\n//# sourceMappingURL=${newFilename}.map` : code,
         map,
       };
     } catch (error) {
