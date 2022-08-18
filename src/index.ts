@@ -2,11 +2,13 @@ export {
   BuildConfig,
   Source,
   PipeContext,
+  Command,
+  Plugin,
+  PluginContext,
   Transformer,
-  TransformerFactory,
   TransformerOptions,
 } from './types';
 
 export { swcTransformer } from './transformers/swcTransformer';
 export { preprocessTransformer } from './transformers/preprocessTransformer';
-export { typescriptDefinitionsPlugin } from './plugins/typescriptDefinitionsPlugin';
+export { typescriptDeclarationsPlugin } from './plugins/typescriptDeclarationsPlugin';

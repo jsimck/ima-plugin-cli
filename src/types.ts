@@ -1,4 +1,3 @@
-export type TransformerFactory<T> = (options: T) => Promise<Transformer>;
 export type Transformer = ({
   source,
   context,

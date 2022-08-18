@@ -3,11 +3,15 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { Plugin } from '../types';
-import { info, error, success, trackTime } from '../utils/utils';
+import { info, error, trackTime } from '../utils/utils';
 
-const DEV_ARGS = ['--watch', '--incremental'];
+export interface TypescriptDeclarationsPluginOptions {
+  additionalArgs?: string[];
+}
 
-export function typescriptDefinitionsPlugin(): Plugin {
+export function typescriptDeclarationsPlugin(
+  options: TypescriptDeclarationsPluginOptions
+): Plugin {
   return async context => {
     if (!fs.existsSync(path.join(context.cwd, 'tsconfig.json'))) {
       info('Skipping, unable to locale tsconfig.json.');
@@ -20,10 +24,13 @@ export function typescriptDefinitionsPlugin(): Plugin {
       spawn(
         'tsc',
         [
+          '--outDir',
+          context.config.output,
           '--emitDeclarationOnly',
-          ...(['dev', 'link'].includes(context.command) && ['--']
-            ? DEV_ARGS
+          ...(['dev', 'link'].includes(context.command)
+            ? ['--watch', '--incremental']
             : []),
+          ...(options?.additionalArgs ?? []),
         ].filter(Boolean) as string[],
         {
           stdio: 'overlapped',
@@ -31,7 +38,7 @@ export function typescriptDefinitionsPlugin(): Plugin {
         }
       )
         .on('close', () => {
-          success(
+          info(
             `Typescript definitions generated in ${chalk.gray(`${time()}`)}`
           );
           resolve();

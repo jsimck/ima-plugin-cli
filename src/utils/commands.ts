@@ -97,6 +97,70 @@ export function watchFactory(command: 'dev' | 'link') {
       // Init processing pipeline
       const process = await createProcessingPipeline(context);
 
+      // Link instance
+      if (command === 'link' && args[0]) {
+        const linkedPath = path.resolve(args[0]);
+        const linkedPkgJson = await parsePkgJSON(linkedPath);
+        const linkedBasePath = path.resolve(
+          linkedPath,
+          'node_modules',
+          pkgJson.name,
+          config.output
+        );
+
+        // Clean linked folder
+        if (fs.existsSync(linkedBasePath)) {
+          fs.rmSync(linkedBasePath, { recursive: true });
+        }
+
+        chokidar
+          .watch([path.join(outputDir, './**/*')], {
+            ignoreInitial: false,
+            ignored: ['**/tsconfig.tsbuildinfo/**'],
+          })
+          .on('all', async (eventName, filePath) => {
+            const contextPath = path.relative(outputDir, filePath);
+            const linkedOutputPath = path.join(linkedBasePath, contextPath);
+            const linkedOutputDir = path.dirname(linkedOutputPath);
+
+            if (['add', 'change'].includes(eventName)) {
+              info(
+                `Copied ${chalk.gray(pkgJson.name + ':')}${chalk.magenta(
+                  contextPath
+                )} ${chalk.green('→')} ${chalk.gray(
+                  linkedPkgJson.name
+                )}:${chalk.magenta(
+                  path.join('./', config.output, contextPath)
+                )}`
+              );
+
+              if (!fs.existsSync(linkedOutputDir)) {
+                await fs.promises.mkdir(linkedOutputDir, { recursive: true });
+              }
+
+              await fs.promises.copyFile(filePath, linkedOutputPath);
+            }
+
+            if (['unlink', 'unlinkDir'].includes(eventName)) {
+              info(
+                `Removing linked ${
+                  chalk.gray(linkedPkgJson.name) + ':'
+                }{chalk.magenta(contextPath)}`
+              );
+              await fs.promises.rm(linkedOutputPath, { recursive: true });
+            }
+
+            if (eventName === 'addDir') {
+              info(
+                `Creating ${
+                  chalk.gray(linkedPkgJson.name) + ':'
+                }${chalk.magenta(contextPath)}`
+              );
+              await fs.promises.mkdir(linkedOutputPath, { recursive: true });
+            }
+          });
+      }
+
       // Dev instance
       chokidar
         .watch([path.join(inputDir, './**/*')], {
@@ -113,7 +177,7 @@ export function watchFactory(command: 'dev' | 'link') {
             info(
               `Processed ${chalk.magenta(relativePath)} in ${chalk.gray(
                 time()
-              )}`
+              )} ${chalk.green('✓')}`
             );
           }
 
@@ -133,61 +197,6 @@ export function watchFactory(command: 'dev' | 'link') {
           // Run plugins
           await runPlugins(context);
         });
-
-      // Link instance
-      if (command === 'link' && args[0]) {
-        const linkedPath = path.resolve(args[0]);
-        const [pkgJson, linkedPkgJson] = await Promise.all([
-          parsePkgJSON(cwd),
-          parsePkgJSON(linkedPath),
-        ]);
-
-        const linkedBasePath = path.resolve(
-          linkedPath,
-          'node_modules',
-          pkgJson.name,
-          config.output
-        );
-
-        chokidar
-          .watch([path.join(outputDir, './**/*')], {
-            ignoreInitial: false,
-            ignored: ['**/tsconfig.tsbuildinfo/**'],
-          })
-          .on('all', async (eventName, filePath) => {
-            const contextPath = path.relative(outputDir, filePath);
-            const outputPath = path.join(linkedBasePath, contextPath);
-
-            if (['add', 'change'].includes(eventName)) {
-              info(
-                `Copied ${chalk.gray(pkgJson.name + ':')}${chalk.magenta(
-                  contextPath
-                )} ${chalk.green('→')} ${chalk.gray(
-                  linkedPkgJson.name
-                )}:${chalk.magenta(contextPath)}`
-              );
-              await fs.promises.copyFile(filePath, outputPath);
-            }
-
-            if (['unlink', 'unlinkDir'].includes(eventName)) {
-              info(
-                `Removing linked ${
-                  chalk.gray(linkedPkgJson.name) + ':'
-                }{chalk.magenta(contextPath)}`
-              );
-              await fs.promises.rm(outputPath, { recursive: true });
-            }
-
-            if (eventName === 'addDir') {
-              info(
-                `Creating ${
-                  chalk.gray(linkedPkgJson.name) + ':'
-                }${chalk.magenta(contextPath)}`
-              );
-              await fs.promises.mkdir(outputPath, { recursive: true });
-            }
-          });
-      }
     });
   };
 }

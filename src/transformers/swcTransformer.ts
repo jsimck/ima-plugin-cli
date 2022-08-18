@@ -6,13 +6,27 @@ const TSX_RE = /\.tsx?/;
 export type SWCTransformerOptions = Options;
 
 export function swcTransformer(options: SWCTransformerOptions): Transformer {
-  return async ({ source }) => {
-    const { code, map } = await transform(source.code, options);
+  return async ({ source, context }) => {
+    try {
+      const { code, map } = await transform(source.code, options);
 
-    return {
-      fileName: source.fileName.replace(TSX_RE, '.js'),
-      code: code + `\n//# sourceMappingURL=${source.fileName}.map`,
-      map,
-    };
+      const newFilename = source.fileName.replace(TSX_RE, '.js');
+      const withSourceMapsComment =
+        code + `\n//# sourceMappingURL=${newFilename}.map`;
+
+      return {
+        fileName: newFilename,
+        code: withSourceMapsComment,
+        map,
+      };
+    } catch (error) {
+      if (context.command === 'build') {
+        throw error;
+      }
+
+      console.log(error);
+    }
+
+    return source;
   };
 }
