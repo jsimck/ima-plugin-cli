@@ -4,7 +4,7 @@ export {
   PipeContext,
   Command,
   Plugin,
-  PluginContext,
+  Context,
   Transformer,
   TransformerOptions,
 } from './types';

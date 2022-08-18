@@ -9,7 +9,7 @@ import {
   parseConfigFile,
   runPlugins,
 } from './process';
-import { Command } from '../types';
+import { Context } from '../types';
 
 /**
  * Build command function handler.
@@ -41,8 +41,8 @@ export async function build() {
         cwd,
       });
 
-      const context = {
-        command: 'build' as Command,
+      const context: Context = {
+        command: 'build',
         inputDir,
         config,
         cwd,
@@ -83,21 +83,18 @@ export function watchFactory(command: 'dev' | 'link') {
 
       // Cleanup
       if (fs.existsSync(outputDir)) {
-        fs.rmSync(outputDir, { recursive: true });
+        await fs.promises.rm(outputDir, { recursive: true });
       }
 
-      const context = {
-        command: command as Command,
+      const context: Context = {
+        command,
         inputDir,
         config,
         cwd,
         outputDir,
       };
 
-      // Init processing pipeline
-      const process = await createProcessingPipeline(context);
-
-      // Link instance
+      // Link watcher
       if (command === 'link' && args[0]) {
         const linkedPath = path.resolve(args[0]);
         const linkedPkgJson = await parsePkgJSON(linkedPath);
@@ -110,13 +107,13 @@ export function watchFactory(command: 'dev' | 'link') {
 
         // Clean linked folder
         if (fs.existsSync(linkedBasePath)) {
-          fs.rmSync(linkedBasePath, { recursive: true });
+          await fs.promises.rm(linkedBasePath, { recursive: true });
         }
 
         chokidar
           .watch([path.join(outputDir, './**/*')], {
             ignoreInitial: false,
-            ignored: ['**/tsconfig.tsbuildinfo/**'],
+            ignored: ['**/tsconfig.tsbuildinfo/**', '**/node_modules/**'],
           })
           .on('all', async (eventName, filePath) => {
             const contextPath = path.relative(outputDir, filePath);
@@ -143,25 +140,28 @@ export function watchFactory(command: 'dev' | 'link') {
 
             if (['unlink', 'unlinkDir'].includes(eventName)) {
               info(
-                `Removing linked ${
-                  chalk.gray(linkedPkgJson.name) + ':'
-                }{chalk.magenta(contextPath)}`
+                `Removing linked ${chalk.gray(
+                  linkedPkgJson.name + ':'
+                )}${chalk.magenta(contextPath)}`
               );
               await fs.promises.rm(linkedOutputPath, { recursive: true });
             }
 
             if (eventName === 'addDir') {
               info(
-                `Creating ${
-                  chalk.gray(linkedPkgJson.name) + ':'
-                }${chalk.magenta(contextPath)}`
+                `Creating ${chalk.gray(
+                  linkedPkgJson.name + ':'
+                )}${chalk.magenta(contextPath)}`
               );
               await fs.promises.mkdir(linkedOutputPath, { recursive: true });
             }
           });
       }
 
-      // Dev instance
+      // Init processing pipeline
+      const process = await createProcessingPipeline(context);
+
+      // Dev watcher
       chokidar
         .watch([path.join(inputDir, './**/*')], {
           ignoreInitial: false,

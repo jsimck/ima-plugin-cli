@@ -1,13 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-import {
-  BuildConfig,
-  Command,
-  PipeContext,
-  PluginContext,
-  Source,
-} from '../types';
+import { BuildConfig, PipeContext, Context, Source } from '../types';
 
 const CONFIG_FILENAME = 'ima-plugin.config.js';
 
@@ -113,13 +107,7 @@ export async function processTransformers(
  * Creates processing pipeline used in build, link and dev scripts.
  * It is constructed to run on each file separately.
  */
-export async function createProcessingPipeline(params: {
-  command: Command;
-  inputDir: string;
-  outputDir: string;
-  cwd: string;
-  config: BuildConfig;
-}) {
+export async function createProcessingPipeline(params: Context) {
   return async (filePath: string) => {
     const fileName = path.basename(filePath);
     const contextDir = path.dirname(path.relative(params.inputDir, filePath));
@@ -150,7 +138,7 @@ export async function createProcessingPipeline(params: {
 /**
  * Runs plugins defined in config file.
  */
-export async function runPlugins(context: PluginContext) {
+export async function runPlugins(context: Context) {
   if (!context.config?.plugins?.length) {
     return;
   }

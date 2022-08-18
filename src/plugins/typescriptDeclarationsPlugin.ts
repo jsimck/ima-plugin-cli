@@ -12,9 +12,15 @@ export interface TypescriptDeclarationsPluginOptions {
 export function typescriptDeclarationsPlugin(
   options: TypescriptDeclarationsPluginOptions
 ): Plugin {
+  let hasTsConfig: boolean | undefined;
+
   return async context => {
-    if (!fs.existsSync(path.join(context.cwd, 'tsconfig.json'))) {
-      info('Skipping, unable to locale tsconfig.json.');
+    if (typeof hasTsConfig === 'undefined') {
+      hasTsConfig = fs.existsSync(path.join(context.cwd, 'tsconfig.json'));
+    }
+
+    if (!hasTsConfig) {
+      return;
     }
 
     const time = trackTime();
@@ -39,7 +45,7 @@ export function typescriptDeclarationsPlugin(
       )
         .on('close', () => {
           info(
-            `Typescript definitions generated in ${chalk.gray(`${time()}`)}`
+            `Typescript declaration generated in ${chalk.gray(`${time()}`)}`
           );
           resolve();
         })

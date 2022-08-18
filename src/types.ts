@@ -18,9 +18,9 @@ export interface BuildConfig {
   plugins?: Plugin[];
 }
 
-export type Plugin = (context: PluginContext) => void | Promise<void>;
+export type Plugin = (context: Context) => void | Promise<void>;
 
-export interface PluginContext {
+export interface Context {
   command: Command;
   cwd: string;
   config: BuildConfig;
