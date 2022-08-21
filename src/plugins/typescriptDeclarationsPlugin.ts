@@ -33,6 +33,7 @@ export function typescriptDeclarationsPlugin(
           '--outDir',
           context.config.output,
           '--emitDeclarationOnly',
+          '--skipLibCheck',
           ...(['dev', 'link'].includes(context.command)
             ? ['--watch', '--incremental']
             : []),
