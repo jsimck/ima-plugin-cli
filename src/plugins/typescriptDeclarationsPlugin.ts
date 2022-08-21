@@ -7,6 +7,7 @@ import { info, error, trackTime } from '../utils/utils';
 
 export interface TypescriptDeclarationsPluginOptions {
   additionalArgs?: string[];
+  tscPath?: string;
 }
 
 export function typescriptDeclarationsPlugin(
@@ -28,7 +29,7 @@ export function typescriptDeclarationsPlugin(
 
     await new Promise<void>((resolve, reject) => {
       spawn(
-        'tsc',
+        options?.tscPath ? options.tscPath : 'tsc',
         [
           '--outDir',
           context.config.output,
