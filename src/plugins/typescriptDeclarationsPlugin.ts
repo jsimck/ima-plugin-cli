@@ -34,14 +34,14 @@ export function typescriptDeclarationsPlugin(
           '--outDir',
           context.config.output,
           '--emitDeclarationOnly',
-          '--skipLibCheck',
+          '--preserveWatchOutput',
           ...(['dev', 'link'].includes(context.command)
             ? ['--watch', '--incremental']
             : []),
           ...(options?.additionalArgs ?? []),
         ].filter(Boolean) as string[],
         {
-          stdio: 'overlapped',
+          stdio: 'inherit',
           cwd: context.cwd,
         }
       )

@@ -4,7 +4,6 @@
   "description": "",
   "private": true,
   "scripts": {
-    "prepare": "tsc",
     "build": "tsc",
     "dev": "tsc -w",
     "test": "echo \"Error: no test specified\" && exit 1"
